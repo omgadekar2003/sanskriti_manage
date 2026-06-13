@@ -1,0 +1,290 @@
+import streamlit as st
+from pathlib import Path
+import json
+import re
+
+# --------------------------------
+# CONFIG
+# --------------------------------
+
+st.set_page_config(
+    page_title="Funtrons Robotics Portal",
+    page_icon="🤖",
+    layout="wide"
+)
+
+DATA_DIR = Path("data")
+DATA_DIR.mkdir(exist_ok=True)
+
+for grade in ["Grade 7", "Grade 8", "Grade 9"]:
+    (DATA_DIR / grade).mkdir(exist_ok=True)
+
+# --------------------------------
+# HELPERS
+# --------------------------------
+
+def safe_name(text):
+    return re.sub(r'[<>:"/\\|?*]', '', text).strip()
+
+def save_activity(grade, title, description, files):
+    activity_path = DATA_DIR / grade / safe_name(title)
+    files_path = activity_path / "files"
+
+    activity_path.mkdir(parents=True, exist_ok=True)
+    files_path.mkdir(exist_ok=True)
+
+    metadata = {
+        "title": title,
+        "description": description
+    }
+
+    with open(activity_path / "metadata.json", "w", encoding="utf-8") as f:
+        json.dump(metadata, f, indent=4)
+
+    for file in files:
+        with open(files_path / file.name, "wb") as f:
+            f.write(file.getbuffer())
+
+def get_activities(grade):
+    grade_path = DATA_DIR / grade
+
+    if not grade_path.exists():
+        return []
+
+    return sorted(
+        [x for x in grade_path.iterdir() if x.is_dir()],
+        key=lambda x: x.name.lower()
+    )
+
+# --------------------------------
+# CUSTOM CSS
+# --------------------------------
+
+st.markdown("""
+<style>
+
+.block-container{
+    padding-top:2rem;
+}
+
+.grade-card{
+    background:#262730;
+    padding:20px;
+    border-radius:15px;
+    text-align:center;
+    margin-bottom:15px;
+}
+
+.activity-card{
+    background:#1E1E1E;
+    padding:15px;
+    border-radius:12px;
+    border:1px solid #333;
+}
+
+.small-text{
+    color:#9e9e9e;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+# --------------------------------
+# SIDEBAR
+# --------------------------------
+
+st.sidebar.title("🤖 Funtrons Portal")
+
+page = st.sidebar.radio(
+    "Navigation",
+    [
+        "📚 Student Portal",
+        "⚙️ Teacher Portal"
+    ]
+)
+
+# --------------------------------
+# STUDENT PORTAL
+# --------------------------------
+
+if page == "📚 Student Portal":
+
+    st.title("🤖 Robotics Learning Portal")
+    st.caption("Download project codes, worksheets, PPTs and resources.")
+
+    grade = st.selectbox(
+        "Select Grade",
+        ["Grade 7", "Grade 8", "Grade 9"]
+    )
+
+    st.divider()
+
+    activities = get_activities(grade)
+
+    if not activities:
+        st.info("No activities uploaded yet.")
+        st.stop()
+
+    search = st.text_input(
+        "🔍 Search Activity"
+    ).lower()
+
+    filtered = []
+
+    for activity in activities:
+        if search in activity.name.lower():
+            filtered.append(activity)
+
+    cols = st.columns(3)
+
+    for index, activity in enumerate(filtered):
+
+        metadata_file = activity / "metadata.json"
+
+        title = activity.name
+        description = ""
+
+        if metadata_file.exists():
+
+            with open(metadata_file, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+
+            title = meta.get("title", title)
+            description = meta.get("description", "")
+
+        with cols[index % 3]:
+
+            with st.container(border=True):
+
+                st.subheader(title)
+
+                st.caption(description)
+
+                if st.button(
+                    "Open Activity",
+                    key=str(activity)
+                ):
+                    st.session_state["selected"] = str(activity)
+
+    # -----------------------
+    # Activity Details
+    # -----------------------
+
+    if "selected" in st.session_state:
+
+        st.divider()
+
+        activity_path = Path(
+            st.session_state["selected"]
+        )
+
+        st.header(activity_path.name)
+
+        metadata_file = activity_path / "metadata.json"
+
+        if metadata_file.exists():
+
+            with open(metadata_file, "r") as f:
+                meta = json.load(f)
+
+            st.write(
+                meta.get("description", "")
+            )
+
+        files_path = activity_path / "files"
+
+        st.subheader("📥 Downloads")
+
+        if files_path.exists():
+
+            files = list(files_path.glob("*"))
+
+            if not files:
+                st.warning("No files uploaded.")
+
+            for file in files:
+
+                with open(file, "rb") as f:
+
+                    st.download_button(
+                        label=f"Download {file.name}",
+                        data=f.read(),
+                        file_name=file.name,
+                        use_container_width=True,
+                        key=file.name
+                    )
+
+# --------------------------------
+# TEACHER PORTAL
+# --------------------------------
+
+else:
+
+    st.title("⚙️ Teacher Portal")
+
+    st.info(
+        "Upload new activities and resources."
+    )
+
+    with st.form("upload_form"):
+
+        grade = st.selectbox(
+            "Grade",
+            ["Grade 7", "Grade 8", "Grade 9"]
+        )
+
+        activity_name = st.text_input(
+            "Activity Name"
+        )
+
+        description = st.text_area(
+            "Description"
+        )
+
+        uploaded_files = st.file_uploader(
+            "Upload Files",
+            accept_multiple_files=True
+        )
+
+        submit = st.form_submit_button(
+            "Create Activity"
+        )
+
+        if submit:
+
+            if not activity_name:
+                st.error(
+                    "Enter activity name."
+                )
+
+            else:
+
+                save_activity(
+                    grade,
+                    activity_name,
+                    description,
+                    uploaded_files
+                )
+
+                st.success(
+                    f"{activity_name} added successfully."
+                )
+
+                st.rerun()
+
+    st.divider()
+
+    st.subheader("Existing Activities")
+
+    for grade in ["Grade 7", "Grade 8", "Grade 9"]:
+
+        with st.expander(grade):
+
+            activities = get_activities(grade)
+
+            if not activities:
+                st.write("No activities.")
+
+            for activity in activities:
+                st.write("📁", activity.name)
+
