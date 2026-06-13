@@ -401,7 +401,7 @@ st.markdown("""
 
 with st.sidebar:
 
-    st.title("🤖 Funtrons")
+    st.title("🤖 Robotics")
 
     if not st.session_state.teacher_logged_in:
 
@@ -437,7 +437,7 @@ with st.sidebar:
 st.markdown(
     """
     <div class="portal-title">
-        <h1>🤖 Funtrons Robotics Learning Portal</h1>
+        <h1>🤖 Robotics Learning Portal</h1>
         <p>Download robotics codes, worksheets, images and project resources.</p>
     </div>
     """,
